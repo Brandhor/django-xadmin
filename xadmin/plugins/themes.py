@@ -7,6 +7,7 @@ from xadmin.sites import site
 from xadmin.models import UserSettings
 from xadmin.views import BaseAdminPlugin, BaseAdminView
 from xadmin.util import static, json
+import six
 
 THEME_CACHE_KEY = 'xadmin_themes'
 
@@ -60,8 +61,8 @@ class ThemePlugin(BaseAdminPlugin):
             else:
                 ex_themes = []
                 try:
-                    watch_themes = json.loads(urllib.urlopen(
-                        'http://api.bootswatch.com/3/').read())['themes']
+                    req = six.moves.urllib.request.Request("http://api.bootswatch.com/3/", headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.3"})
+                    watch_themes = json.loads(six.moves.urllib.request.urlopen(req).read())['themes']
                     ex_themes.extend([
                         {'name': t['name'], 'description': t['description'],
                             'css': t['cssMin'], 'thumbnail': t['thumbnail']}
