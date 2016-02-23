@@ -1,10 +1,10 @@
-# coding=UTF-8
+# coding=utf-8
 from django.core.urlresolvers import reverse
-from django.utils.encoding import force_unicode
+from django.utils.encoding import force_str
 from django.utils.encoding import smart_str
 from django.utils.safestring import mark_safe
 from django.db.models.sql.query import LOOKUP_SEP
-from django.db.models.related import RelatedObject
+from django.db.models.fields.related import ForeignObjectRel
 from django.utils.translation import ugettext as _
 from django.db import models
 
@@ -24,7 +24,13 @@ class RelateMenuPlugin(BaseAdminPlugin):
             return self._related_acts
 
         _related_acts = []
-        for r in self.opts.get_all_related_objects() + self.opts.get_all_related_many_to_many_objects():
+        fields = []
+        for f in self.opts.get_fields():
+            if (f.one_to_many or f.one_to_one) and f.auto_created:
+                fields += [f]
+            if f.many_to_many and f.auto_created:
+                fields += [f]
+        for r in fields:
             if self.related_list and (r.get_accessor_name() not in self.related_list):
                 continue
             if r.model not in self.admin_site._registry.keys():
@@ -47,7 +53,7 @@ class RelateMenuPlugin(BaseAdminPlugin):
             f = r.field
             rel_name = f.rel.get_related_field().name
 
-            verbose_name = force_unicode(r.opts.verbose_name)
+            verbose_name = force_str(r.opts.verbose_name)
             lookup_name = '%s__%s__exact' % (f.name, rel_name)
 
             link = ''.join(('<li class="with_menu_btn">',
@@ -95,7 +101,7 @@ class RelateObject(object):
         parts = lookup.split(LOOKUP_SEP)
         field = self.opts.get_field_by_name(parts[0])[0]
 
-        if not hasattr(field, 'rel') and not isinstance(field, RelatedObject):
+        if not hasattr(field, 'rel') and not isinstance(field, ForeignObjectRel):
             raise Exception(u'Relate Lookup field must a related field')
 
         if hasattr(field, 'rel'):
@@ -119,16 +125,16 @@ class RelateObject(object):
         if len(self.to_objs) == 1:
             to_model_name = str(self.to_objs[0])
         else:
-            to_model_name = force_unicode(self.to_model._meta.verbose_name)
+            to_model_name = force_str(self.to_model._meta.verbose_name)
 
-        return mark_safe(u"<span class='rel-brand'>%s <i class='fa fa-caret-right'></i></span> %s" % (to_model_name, force_unicode(self.opts.verbose_name_plural)))
+        return mark_safe(u"<span class='rel-brand'>%s <i class='fa fa-caret-right'></i></span> %s" % (to_model_name, force_str(self.opts.verbose_name_plural)))
 
 
 class BaseRelateDisplayPlugin(BaseAdminPlugin):
 
     def init_request(self, *args, **kwargs):
         self.relate_obj = None
-        for k, v in self.request.REQUEST.items():
+        for k, v in self.request.GET.items()+self.request.POST.items():
             if smart_str(k).startswith(RELATE_PREFIX):
                 self.relate_obj = RelateObject(
                     self.admin_view, smart_str(k)[len(RELATE_PREFIX):], v)

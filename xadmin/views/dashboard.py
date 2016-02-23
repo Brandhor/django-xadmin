@@ -2,14 +2,15 @@ from django import forms
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.db import models
+from django.apps import apps
 from django.db.models.base import ModelBase
 from django.forms.forms import DeclarativeFieldsMetaclass
-from django.forms.util import flatatt
+from django.forms.utils import flatatt
 from django.template import loader
 from django.http import Http404
 from django.template.context import RequestContext
 from django.test.client import RequestFactory
-from django.utils.encoding import force_unicode, smart_unicode
+from xadmin.compatibility import force_str, smart_unicode
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext as _
@@ -38,12 +39,12 @@ class WidgetTypeSelect(forms.Widget):
         final_attrs = self.build_attrs(attrs, name=name)
         final_attrs['class'] = 'nav nav-pills nav-stacked'
         output = [u'<ul%s>' % flatatt(final_attrs)]
-        options = self.render_options(force_unicode(value), final_attrs['id'])
+        options = self.render_options(force_str(value), final_attrs['id'])
         if options:
             output.append(options)
         output.append(u'</ul>')
         output.append('<input type="hidden" id="%s_input" name="%s" value="%s"/>' %
-                     (final_attrs['id'], name, force_unicode(value)))
+                     (final_attrs['id'], name, force_str(value)))
         return mark_safe(u'\n'.join(output))
 
     def render_option(self, selected_choice, widget, id):
@@ -79,8 +80,8 @@ class UserWidgetAdmin(object):
 
     wizard_form_list = (
         (_(u"Widget Type"), ('page_id', 'widget_type')),
-        (_(u"Widget Params"), {'callback':
-                               "get_widget_params_form", 'convert': "convert_widget_params"})
+        (_(u"Widget Params"), {'callback': "get_widget_params_form", \
+                               'convert': "convert_widget_params"})
     )
 
     def formfield_for_dbfield(self, db_field, **kwargs):
@@ -214,7 +215,7 @@ class BaseWidget(forms.Form):
         context = {'widget_id': self.id, 'widget_title': self.title, 'widget_icon': self.widget_icon,
             'widget_type': self.widget_type, 'form': self, 'widget': self}
         self.context(context)
-        return loader.render_to_string(self.template, context, context_instance=RequestContext(self.request))
+        return loader.render_to_string(self.template, context, request=self.request)
 
     def context(self, context):
         pass
@@ -245,12 +246,9 @@ class BaseWidget(forms.Form):
 class HtmlWidget(BaseWidget):
     widget_type = 'html'
     widget_icon = 'fa fa-file-o'
-    description = _(
-        u'Html Content Widget, can write any html content in widget.')
+    description = _(u'Html Content Widget, can write any html content in widget.')
 
-    content = forms.CharField(label=_(
-        'Html Content'), widget=exwidgets.AdminTextareaWidget, required=False)
-
+    content = forms.CharField(label=_('Html Content'), widget=exwidgets.AdminTextareaWidget, required=False)
     def has_perm(self):
         return True
 
@@ -292,7 +290,7 @@ class ModelChoiceField(forms.ChoiceField):
         if isinstance(value, ModelBase):
             return value
         app_label, model_name = value.lower().split('.')
-        return models.get_model(app_label, model_name)
+        return apps.get_model(app_label, model_name)
 
     def prepare_value(self, value):
         if isinstance(value, ModelBase):
@@ -375,7 +373,7 @@ class QuickBtnWidget(BaseWidget):
         if isinstance(model_or_label, ModelBase):
             return model_or_label
         else:
-            return models.get_model(*model_or_label.lower().split('.'))
+            return apps.get_model(*model_or_label.lower().split('.'))
 
     def context(self, context):
         btns = []
@@ -554,7 +552,9 @@ class Dashboard(CommAdminView):
                                 widget = user_widgets.get(int(wid))
                                 if widget:
                                     ws.append(self.get_widget(widget))
-                            except Exception, e:
+                            except Exception:
+                                import sys
+                                e = sys.exc_info()[1]
                                 import logging
                                 logging.error(e, exc_info=True)
                         widgets.append(ws)
@@ -633,7 +633,7 @@ class ModelDashboard(Dashboard, ModelAdminView):
 
     @filter_hook
     def get_title(self):
-        return self.title % force_unicode(self.obj)
+        return self.title % force_str(self.obj)
 
     def init_request(self, object_id, *args, **kwargs):
         self.obj = self.get_object(unquote(object_id))
@@ -643,7 +643,7 @@ class ModelDashboard(Dashboard, ModelAdminView):
 
         if self.obj is None:
             raise Http404(_('%(name)s object with primary key %(key)r does not exist.') %
-                          {'name': force_unicode(self.opts.verbose_name), 'key': escape(object_id)})
+                          {'name': force_str(self.opts.verbose_name), 'key': escape(object_id)})
 
     @filter_hook
     def get_context(self):
