@@ -13,7 +13,7 @@ from xadmin.util import json
 from xadmin.views.list import ALL_VAR
 
 try:
-    from StringIO import StringIO
+    import StringIO
 except ImportError:
     from io import StringIO
 
