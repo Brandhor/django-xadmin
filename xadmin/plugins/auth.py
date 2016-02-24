@@ -16,7 +16,7 @@ from xadmin.layout import Fieldset, Main, Side, Row, FormHelper
 from xadmin.sites import site
 from xadmin.util import unquote, User
 from xadmin.views import BaseAdminPlugin, ModelFormAdminView, ModelAdminView, CommAdminView, csrf_protect_m
-
+import django
 
 ACTION_NAME = {
     'add': _('Can add %s'),
@@ -258,7 +258,13 @@ class ChangeAccountPasswordView(ChangePasswordView):
         else:
             return self.get_response()
 
-site.register_view(r'^auth/user/(.+)/update/password/$',
+
+if django.VERSION[1] < 9:
+    chpwurl = r'^auth/user/(.+)/update/password/$'
+else:
+    chpwurl = r'^auth/user/(.+)/password/$'
+
+site.register_view(chpwurl,
                    ChangePasswordView, name='user_change_password')
 site.register_view(r'^account/password/$', ChangeAccountPasswordView,
                    name='account_password')
