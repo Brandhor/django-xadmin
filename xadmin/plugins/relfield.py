@@ -8,7 +8,7 @@ from xadmin.views import BaseAdminPlugin, ModelFormAdminView
 from xadmin.util import vendor
 
 
-class ForeignKeySearchWidget(forms.TextInput):
+class ForeignKeySearchWidget(forms.Select):
 
     def __init__(self, rel, admin_view, attrs=None, using=None):
         self.rel = rel
@@ -21,9 +21,9 @@ class ForeignKeySearchWidget(forms.TextInput):
         if attrs is None:
             attrs = {}
         if "class" not in attrs:
-            attrs['class'] = 'select-search'
+            attrs['class'] = 'select-search form-control'
         else:
-            attrs['class'] = attrs['class'] + ' select-search'
+            attrs['class'] = attrs['class'] + ' select-search form-control'
         attrs['data-search-url'] = self.admin_view.get_admin_url(
             '%s_%s_changelist' % (to_opts.app_label, to_opts.model_name))
         attrs['data-placeholder'] = _('Search %s') % to_opts.verbose_name
