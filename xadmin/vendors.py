@@ -20,20 +20,14 @@ vendors = {
         "js": {
             'dev': 'xadmin/vendor/jquery/jquery.js',
             'production': 'xadmin/vendor/jquery/jquery.min.js',
+            'cdn': 'http://code.jquery.com/jquery-2.2.1.min.js',
         }
     },
-    'jquery-ui-effect': {
+    'jquery-ui': {
         "js": {
-            'dev': 'xadmin/vendor/jquery-ui/jquery.ui.effect.js',
-            'production': 'xadmin/vendor/jquery-ui/jquery.ui.effect.min.js'
-        }
-    },
-    'jquery-ui-sortable': {
-        "js": {
-            'dev': ['xadmin/vendor/jquery-ui/jquery.ui.core.js', 'xadmin/vendor/jquery-ui/jquery.ui.widget.js',
-                    'xadmin/vendor/jquery-ui/jquery.ui.mouse.js', 'xadmin/vendor/jquery-ui/jquery.ui.sortable.js'],
-            'production': ['xadmin/vendor/jquery-ui/jquery.ui.core.min.js', 'xadmin/vendor/jquery-ui/jquery.ui.widget.min.js',
-                           'xadmin/vendor/jquery-ui/jquery.ui.mouse.min.js', 'xadmin/vendor/jquery-ui/jquery.ui.sortable.min.js']
+            'dev': 'xadmin/vendor/jquery-ui/jquery-ui.js',
+            'production': 'xadmin/vendor/jquery-ui/jquery-ui.min.js',
+            'cdn': 'http://code.jquery.com/ui/1.11.4/jquery-ui.min.js',
         }
     },
     "font-awesome": {
