@@ -147,6 +147,9 @@ select.selectmultiple {
   .form-horizontal .fieldset .panel-body {
     padding-top: 24px;
   }
+  .form-inline .form-control {
+    width:100%;
+  }
 }
 @media (min-width: 768px) and (max-width: 991px) {
   .form-horizontal .control-label {
