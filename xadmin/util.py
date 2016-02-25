@@ -61,10 +61,9 @@ def xstatic(*tags):
         if isinstance(node, six.string_types):
             files = node
         else:
-            mode = 'dev'
-            if not settings.DEBUG:
-                mode = getattr(settings, 'STATIC_USE_CDN',
-                               False) and 'cdn' or 'production'
+            mode = 'dev' if settings.DEBUG else 'production'
+            mode = getattr(settings, 'STATIC_USE_CDN',
+                           False) and 'cdn' or mode
 
             if mode == 'cdn' and mode not in node:
                 mode = 'production'
