@@ -34,6 +34,7 @@ vendors = {
         "css": {
             'dev': 'xadmin/vendor/font-awesome/css/font-awesome.css',
             'production': 'xadmin/vendor/font-awesome/css/font-awesome.min.css',
+            'cdn': 'http://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css',
         }
     },
     "timepicker": {
