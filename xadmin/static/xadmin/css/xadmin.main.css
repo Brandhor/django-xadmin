@@ -301,11 +301,6 @@ a[class^="icon-"]:before, a[class*=" icon-"]:before {
   margin-right: 0.3em;
 }
 
-/** fix navbar input-append and input-prepend margin **/
-.navbar .navbar-brand {
-  max-width: 400px;
-}
-
 /** import for bp3.0 */
 .pagination.pagination-inline{margin-top: 0px; margin-bottom: 10px;}
 .modal { overflow-y: auto;}
