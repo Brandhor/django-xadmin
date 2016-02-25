@@ -23,6 +23,10 @@ from xadmin.views.detail import DetailAdminUtil
 from reversion.models import Revision, Version
 from reversion.revisions import default_revision_manager, RegistrationError
 from functools import partial
+try:
+    from crispy_forms.utils import TEMPLATE_PACK
+except:
+    TEMPLATE_PACK = 'bootstrap3'
 
 
 def _autoregister(admin, model, follow=None):
@@ -400,11 +404,11 @@ class BaseRevisionView(ModelFormAdminView):
 
 class DiffField(Field):
 
-    def render(self, form, form_style, context):
+    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK):
         html = ''
         for field in self.fields:
             html += ('<div class="diff_field" rel="tooltip"><textarea class="org-data" style="display:none;">%s</textarea>%s</div>' %
-                    (_('Current: %s') % self.attrs.pop('orgdata', ''), render_field(field, form, form_style, context, template=self.template, attrs=self.attrs)))
+                    (_('Current: %s') % self.attrs.pop('orgdata', ''), render_field(field, form, form_style, context, template=self.get_template_name(template_pack), attrs=self.attrs, template_pack=template_pack)))
         return html
 
 
@@ -496,7 +500,7 @@ class RecoverView(BaseRevisionView):
 
 class InlineDiffField(Field):
 
-    def render(self, form, form_style, context):
+    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK):
         html = ''
         instance = form.instance
         if not instance.pk:
@@ -508,7 +512,7 @@ class InlineDiffField(Field):
         for field in self.fields:
             f = opts.get_field(field)
             f_html = render_field(field, form, form_style, context,
-                                  template=self.template, attrs=self.attrs)
+                                  template=self.get_template_name(template_pack), attrs=self.attrs, template_pack=template_pack)
             if f.value_from_object(instance) != initial.get(field, None):
                 current_val = detail.get_field_result(f.name).val
                 html += ('<div class="diff_field" rel="tooltip"><textarea class="org-data" style="display:none;">%s</textarea>%s</div>'
