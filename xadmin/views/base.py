@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import copy
 import functools
@@ -429,7 +430,7 @@ class CommAdminView(BaseAdminView):
             'menu_template': self.menu_template,
             'nav_menu': nav_menu,
             'site_title': self.site_title or _(u'Django Xadmin'),
-            'site_footer': self.site_footer or _(u'my-company.inc'),
+            'site_footer': self.site_footer or _(u'© my-company.inc'),
             'breadcrumbs': self.get_breadcrumb()
         })
 
