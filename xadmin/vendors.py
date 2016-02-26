@@ -85,9 +85,11 @@ vendors = {
     "multiselect": {
         "css": {
             'dev': 'xadmin/vendor/bootstrap-multiselect/css/bootstrap-multiselect.css',
+            'cdn': 'http://cdnjs.cloudflare.com/ajax/libs/bootstrap-multiselect/0.9.13/css/bootstrap-multiselect.css',
         },
         "js": {
             'dev': 'xadmin/vendor/bootstrap-multiselect/js/bootstrap-multiselect.js',
+            'cdn': 'http://cdnjs.cloudflare.com/ajax/libs/bootstrap-multiselect/0.9.13/js/bootstrap-multiselect.min.js',
         }
     },
     "snapjs": {
