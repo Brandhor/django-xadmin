@@ -58,6 +58,7 @@
           var el = $(this).find('input');
           var value = el.val();
           var tp = el.timepicker({
+            showWidgetOnAddonClick:false,
             minuteStep: 1,
             showSeconds: true,
             showMeridian: false,
