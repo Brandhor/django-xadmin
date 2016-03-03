@@ -1,10 +1,11 @@
 ;(function($){
     $(function() {
         var action_bar = $('.form-actions');
+        var content_block = $("#content-block");
         if(action_bar.length){
-            var height=action_bar[0].offsetTop + action_bar.outerHeight();
             var onchange = function(){
                 var s=(document.body.scrollTop||document.documentElement.scrollTop) + window.innerHeight;
+                var height=content_block.outerHeight()+content_block[0].offsetTop;
                 if(s<height){action_bar.addClass('fixed');}
                 else{action_bar.removeClass('fixed');}
             }
