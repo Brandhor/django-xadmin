@@ -160,7 +160,7 @@ class BaseAdminObject(object):
             p = filte_dict(p, lambda key, value: not key.startswith(r) )
 
         for k, v in new_params.items():
-            if v: p[k] = v
+            if v is not None: p[k] = v
 
         return '?%s' % urlencode(p)
 
