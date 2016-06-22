@@ -25,7 +25,13 @@ class RelateMenuPlugin(BaseAdminPlugin):
             return self._related_acts
 
         _related_acts = []
-        for r in list(self.opts.get_fields()) + list(self.opts.get_fields()):
+        fields = []
+        for f in self.opts.get_fields():
+            if (f.one_to_many or f.one_to_one) and f.auto_created:
+                fields += [f]
+            if f.many_to_many and f.auto_created:
+                    fields += [f]
+        for r in fields:
             if self.related_list and (r.get_accessor_name() not in self.related_list):
                 continue
             if r.model not in self.admin_site._registry.keys():
@@ -43,12 +49,16 @@ class RelateMenuPlugin(BaseAdminPlugin):
     def related_link(self, instance):
         links = []
         for r, view_perm, add_perm in self.get_related_list():
-            label = r.opts.app_label
-            model_name = r.opts.model_name
+            label = r.related_model._meta.app_label
+            model_name = r.related_model._meta.model_name
+
+            if not r.related_model in self.admin_site._registry:
+                continue
+
             f = r.field
             rel_name = f.rel.get_related_field().name
 
-            verbose_name = force_unicode(r.opts.verbose_name)
+            verbose_name = force_unicode(r.related_model._meta.verbose_name)
             lookup_name = '%s__%s__exact' % (f.name, rel_name)
 
             link = ''.join(('<li class="with_menu_btn">',
