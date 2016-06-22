@@ -1,15 +1,16 @@
-# coding=utf-8
+# coding=UTF-8
 from django.core.urlresolvers import reverse
-from django.utils.encoding import force_str
+from django.utils.encoding import force_unicode
 from django.utils.encoding import smart_str
 from django.utils.safestring import mark_safe
 from django.db.models.sql.query import LOOKUP_SEP
-from django.db.models.fields.related import ForeignObjectRel
 from django.utils.translation import ugettext as _
 from django.db import models
 
+
 from xadmin.sites import site
 from xadmin.views import BaseAdminPlugin, ListAdminView, CreateAdminView, UpdateAdminView, DeleteAdminView
+from xadmin.util import is_related_field2
 
 RELATE_PREFIX = '_rel_'
 
@@ -24,13 +25,7 @@ class RelateMenuPlugin(BaseAdminPlugin):
             return self._related_acts
 
         _related_acts = []
-        fields = []
-        for f in self.opts.get_fields():
-            if (f.one_to_many or f.one_to_one) and f.auto_created:
-                fields += [f]
-            if f.many_to_many and f.auto_created:
-                fields += [f]
-        for r in fields:
+        for r in list(self.opts.get_fields()) + list(self.opts.get_fields()):
             if self.related_list and (r.get_accessor_name() not in self.related_list):
                 continue
             if r.model not in self.admin_site._registry.keys():
@@ -48,16 +43,12 @@ class RelateMenuPlugin(BaseAdminPlugin):
     def related_link(self, instance):
         links = []
         for r, view_perm, add_perm in self.get_related_list():
-            label = r.related_model._meta.app_label
-            model_name = r.related_model._meta.model_name
-
-            if not r.related_model in  self.admin_site._registry:
-                continue
-
+            label = r.opts.app_label
+            model_name = r.opts.model_name
             f = r.field
             rel_name = f.rel.get_related_field().name
 
-            verbose_name = force_str(r.related_model._meta.verbose_name)
+            verbose_name = force_unicode(r.opts.verbose_name)
             lookup_name = '%s__%s__exact' % (f.name, rel_name)
 
             link = ''.join(('<li class="with_menu_btn">',
@@ -103,9 +94,9 @@ class RelateObject(object):
         self.value = value
 
         parts = lookup.split(LOOKUP_SEP)
-        field = self.opts.get_field_by_name(parts[0])[0]
+        field = self.opts.get_field(parts[0])
 
-        if not hasattr(field, 'rel') and not isinstance(field, ForeignObjectRel):
+        if not is_related_field2(field):
             raise Exception(u'Relate Lookup field must a related field')
 
         if hasattr(field, 'rel'):
@@ -129,16 +120,16 @@ class RelateObject(object):
         if len(self.to_objs) == 1:
             to_model_name = str(self.to_objs[0])
         else:
-            to_model_name = force_str(self.to_model._meta.verbose_name)
+            to_model_name = force_unicode(self.to_model._meta.verbose_name)
 
-        return mark_safe(u"<span class='rel-brand'>%s <i class='fa fa-caret-right'></i></span> %s" % (to_model_name, force_str(self.opts.verbose_name_plural)))
+        return mark_safe(u"<span class='rel-brand'>%s <i class='fa fa-caret-right'></i></span> %s" % (to_model_name, force_unicode(self.opts.verbose_name_plural)))
 
 
 class BaseRelateDisplayPlugin(BaseAdminPlugin):
 
     def init_request(self, *args, **kwargs):
         self.relate_obj = None
-        for k, v in self.request.GET.items()+self.request.POST.items():
+        for k, v in self.request.GET.items():
             if smart_str(k).startswith(RELATE_PREFIX):
                 self.relate_obj = RelateObject(
                     self.admin_view, smart_str(k)[len(RELATE_PREFIX):], v)

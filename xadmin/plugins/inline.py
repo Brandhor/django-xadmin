@@ -1,7 +1,5 @@
-import six
 import copy
 import inspect
-from collections import OrderedDict
 from django import forms
 from django.forms.formsets import all_valid, DELETION_FIELD_NAME
 from django.forms.models import inlineformset_factory, BaseInlineFormSet, modelform_defines_fields
@@ -9,15 +7,11 @@ from django.contrib.contenttypes.forms import BaseGenericInlineFormSet, generic_
 from django.template import loader
 from django.template.loader import render_to_string
 from django.contrib.auth import get_permission_codename
-from django.utils import six
+from crispy_forms.utils import TEMPLATE_PACK
+
 from xadmin.layout import FormHelper, Layout, flatatt, Container, Column, Field, Fieldset
 from xadmin.sites import site
 from xadmin.views import BaseAdminPlugin, ModelFormAdminView, DetailAdminView, filter_hook
-
-try:
-    from crispy_forms.utils import TEMPLATE_PACK
-except:
-    TEMPLATE_PACK = 'bootstrap3'
 
 
 class ShowField(Field):
@@ -29,23 +23,23 @@ class ShowField(Field):
         if admin_view.style == 'table':
             self.template = "xadmin/layout/field_value_td.html"
 
-    def render(self, form, form_style, context,template_pack=TEMPLATE_PACK):
+    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK, **kwargs):
         html = ''
         detail = form.detail
         for field in self.fields:
             if not isinstance(form.fields[field].widget, forms.HiddenInput):
                 result = detail.get_field_result(field)
                 html += loader.render_to_string(
-                    self.template, {'field': form[field], 'result': result})
+                    self.template, context={'field': form[field], 'result': result})
         return html
 
 
 class DeleteField(Field):
 
-    def render(self, form, form_style, context,template_pack=TEMPLATE_PACK):
+    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK, **kwargs):
         if form.instance.pk:
             self.attrs['type'] = 'hidden'
-            return super(DeleteField, self).render(form, form_style, context)
+            return super(DeleteField, self).render(form, form_style, context, template_pack=TEMPLATE_PACK, **kwargs)
         else:
             return ""
 
@@ -121,7 +115,7 @@ def replace_field_to_value(layout, av):
         for i, lo in enumerate(layout.fields):
             if isinstance(lo, Field) or issubclass(lo.__class__, Field):
                 layout.fields[i] = ShowField(av, *lo.fields, **lo.attrs)
-            elif isinstance(lo, six.string_types):
+            elif isinstance(lo, basestring):
                 layout.fields[i] = ShowField(av, lo)
             elif hasattr(lo, 'get_field_names'):
                 replace_field_to_value(lo, av)
@@ -194,7 +188,6 @@ class InlineModelAdmin(ModelFormAdminView):
 
         helper = FormHelper()
         helper.form_tag = False
-        helper.include_media = False
         # override form method to prevent render csrf_token in inline forms, see template 'bootstrap/whole_uni_form.html'
         helper.form_method = 'get'
 
@@ -202,22 +195,23 @@ class InlineModelAdmin(ModelFormAdminView):
             'one' if self.max_num == 1 else self.style)(self, instance)
         style.name = self.style
 
-        layout = copy.deepcopy(self.form_layout)
+        if len(instance):
+            layout = copy.deepcopy(self.form_layout)
 
-        if layout is None:
-            layout = Layout(*instance.empty_form.fields.keys())
-        elif type(layout) in (list, tuple) and len(layout) > 0:
-            layout = Layout(*layout)
+            if layout is None:
+                layout = Layout(*instance[0].fields.keys())
+            elif type(layout) in (list, tuple) and len(layout) > 0:
+                layout = Layout(*layout)
 
-            rendered_fields = [i[1] for i in layout.get_field_names()]
-            layout.extend([f for f in instance[0]
-                          .fields.keys() if f not in rendered_fields])
+                rendered_fields = [i[1] for i in layout.get_field_names()]
+                layout.extend([f for f in instance[0]
+                              .fields.keys() if f not in rendered_fields])
 
-        helper.add_layout(layout)
-        style.update_layout(helper)
+            helper.add_layout(layout)
+            style.update_layout(helper)
 
-        # replace delete field with Dynamic field, for hidden delete field when instance is NEW.
-        helper[DELETION_FIELD_NAME].wrap(DeleteField)
+            # replace delete field with Dynamic field, for hidden delete field when instance is NEW.
+            helper[DELETION_FIELD_NAME].wrap(DeleteField)
 
         instance.helper = helper
         instance.style = style
@@ -232,7 +226,7 @@ class InlineModelAdmin(ModelFormAdminView):
                         value = None
                         label = None
                         if readonly_field in inst._meta.get_all_field_names():
-                            label = inst._meta.get_field_by_name(readonly_field)[0].verbose_name
+                            label = inst._meta.get_field(readonly_field).verbose_name
                             value = unicode(getattr(inst, readonly_field))
                         elif inspect.ismethod(getattr(inst, readonly_field, None)):
                             value = getattr(inst, readonly_field)()
@@ -321,8 +315,7 @@ class GenericInlineModelAdmin(InlineModelAdmin):
 
 
 class InlineFormset(Fieldset):
-    link_template = '%s/layout/tab-link.html'
-    
+
     def __init__(self, formset, allow_blank=False, **kwargs):
         self.fields = []
         self.css_class = kwargs.pop('css_class', '')
@@ -338,19 +331,9 @@ class InlineFormset(Fieldset):
         self.flat_attrs = flatatt(kwargs)
         self.extra_attrs = formset.style.get_attrs()
 
-    def render_link(self, template_pack=TEMPLATE_PACK, **kwargs):
-        """
-        Render the link for the tab-pane. It must be called after render so css_class is updated
-        with active if needed.
-        """
-        link_template = self.link_template % template_pack
-        return render_to_string(link_template, {'link': self})
-    
-    def render(self, form, form_style, context,template_pack=TEMPLATE_PACK):
-        cx = context.flatten()
-        cx.update(dict({'formset': self, 'prefix': self.formset.prefix, 'inline_style': self.inline_style}, **self.extra_attrs))
+    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK, **kwargs):
         return render_to_string(
-            self.template, cx, request=context.request)
+            self.template, dict({'formset': self, 'prefix': self.formset.prefix, 'inline_style': self.inline_style}, **self.extra_attrs))
 
 
 class Inline(Fieldset):
@@ -358,8 +341,9 @@ class Inline(Fieldset):
     def __init__(self, rel_model):
         self.model = rel_model
         self.fields = []
+        super(Inline,self).__init__(legend="")
 
-    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK):
+    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK, **kwargs):
         return ""
 
 
@@ -403,6 +387,7 @@ class InlineFormsetPlugin(BaseAdminPlugin):
                     inline.max_num = 0
                 inline_instances.append(inline)
             self._inline_instances = inline_instances
+
         return self._inline_instances
 
     def instance_forms(self, ret):
@@ -436,7 +421,7 @@ class InlineFormsetPlugin(BaseAdminPlugin):
     def get_form_layout(self, layout):
         allow_blank = isinstance(self.admin_view, DetailAdminView)
         # fixed #176 bug, change dict to list
-        fs = OrderedDict([(f.model, InlineFormset(f, allow_blank)) for f in self.formsets])
+        fs = [(f.model, InlineFormset(f, allow_blank)) for f in self.formsets]
         replace_inline_objects(layout, fs)
 
         if fs:
@@ -447,7 +432,7 @@ class InlineFormsetPlugin(BaseAdminPlugin):
                 container = layout
 
             # fixed #176 bug, change dict to list
-            for key, value in six.iteritems(fs):
+            for key, value in fs:
                 container.append(value)
 
         return layout

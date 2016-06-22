@@ -6,6 +6,7 @@ import shutil
 import sys
 import tempfile
 import django
+from django.apps import AppConfig,apps
 
 
 TEST_ROOT = os.path.realpath(os.path.dirname(__file__))
@@ -77,9 +78,6 @@ def setup(verbosity, test_labels):
     # (This import statement is intentionally delayed until after we
     # access settings because of the USE_I18N dependency.)
 
-    django.setup()
-    from django.db.models.loading import get_apps, load_app
-    get_apps()
 
     # Load all the test model apps.
     test_labels_set = set([label.split('.')[0] for label in test_labels])
@@ -94,11 +92,11 @@ def setup(verbosity, test_labels):
         if not test_labels or module_name in test_labels_set:
             if verbosity >= 2:
                 print("Importing application %s" % module_name)
-            mod = load_app(module_label)
-            if mod:
                 if module_label not in settings.INSTALLED_APPS:
                     settings.INSTALLED_APPS.append(module_label)
 
+    django.setup()
+    [a.models_module for a in apps.get_app_configs()]
     return state
 
 def teardown(state):
@@ -166,7 +164,6 @@ if __name__ == "__main__":
 
     if options.liveserver is not None:
         os.environ['DJANGO_LIVE_TEST_SERVER_ADDRESS'] = options.liveserver
-
     failures = django_tests(int(options.verbosity), options.interactive,
                             options.failfast, args)
     if failures:

@@ -1,4 +1,5 @@
 from django import forms
+from django.apps import apps
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.db import models

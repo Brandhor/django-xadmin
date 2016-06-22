@@ -1,30 +1,32 @@
+import django
 from django.db import models
-from django.contrib.auth import get_permission_codename
-from django.core.exceptions import FieldDoesNotExist
-from django.core.urlresolvers import NoReverseMatch, reverse
-from django.db.models.constants import LOOKUP_SEP
+from django.db.models.sql.query import LOOKUP_SEP
 from django.db.models.deletion import Collector
-from django.utils import formats, six, timezone
-from django.utils.encoding import force_str, force_text, smart_text
-from django.utils.html import format_html
-from django.utils.translation import ungettext
+from django.db.models.fields.related import ForeignObjectRel
+from django.forms.forms import pretty_name
+from django.utils import formats
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.text import capfirst
-from django.forms.forms import pretty_name
+from django.utils.encoding import force_unicode, smart_unicode, smart_str
+from django.utils.translation import ungettext
+from django.core.urlresolvers import reverse
 from django.conf import settings
 from django.forms import Media
 from django.utils.translation import get_language
-from xadmin.vendors import vendors
-import json   # used by xadmin.views.base. I don't know why.
-
+from django.contrib.admin.utils import label_for_field,help_text_for_field
 import datetime
 import decimal
-from collections import defaultdict
 
 if 'django.contrib.staticfiles' in settings.INSTALLED_APPS:
     from django.contrib.staticfiles.templatetags.staticfiles import static
 else:
     from django.templatetags.static import static
+
+try:
+    import json
+except ImportError:
+    from django.utils import simplejson as json
 
 try:
     from django.utils.timezone import template_localtime as tz_localtime
@@ -41,14 +43,17 @@ except Exception:
 
 
 def xstatic(*tags):
+    from vendors import vendors
+    node = vendors
+
     fs = []
     lang = get_language()
-    node = vendors
+
     for tag in tags:
         try:
             for p in tag.split('.'):
                 node = node[p]
-        except Exception as e:
+        except Exception, e:
             if tag.startswith('xadmin'):
                 file_type = tag.split('.')[-1]
                 if file_type in ('css', 'js'):
@@ -58,12 +63,12 @@ def xstatic(*tags):
             else:
                 raise e
 
-        if isinstance(node, six.string_types):
+        if type(node) in (str, unicode):
             files = node
         else:
             mode = 'dev' if settings.DEBUG else 'production'
             mode = getattr(settings, 'STATIC_USE_CDN',
-                           False) and 'cdn' or mode
+                               False) and 'cdn' or mode
 
             if mode == 'cdn' and mode not in node:
                 mode = 'production'
@@ -95,7 +100,10 @@ def lookup_needs_distinct(opts, lookup_path):
     """
     field_name = lookup_path.split('__', 1)[0]
     field = opts.get_field(field_name)
-    if hasattr(field, 'get_path_info') and any(path.m2m for path in field.get_path_info()):
+    if ((hasattr(field, 'rel') and
+         isinstance(field.rel, models.ManyToManyRel)) or
+        (is_related_field(field) and
+         not field.field.unique)):
         return True
     return False
 
@@ -108,8 +116,8 @@ def prepare_lookup_value(key, value):
     if key.endswith('__in'):
         value = value.split(',')
     # if key ends with __isnull, special case '' and false
-    if key.endswith('__isnull'):
-        if value.lower() in ('', 'false', '0'):
+    if key.endswith('__isnull') and type(value) == str:
+        if value.lower() in ('', 'false'):
             value = False
         else:
             value = True
@@ -123,7 +131,7 @@ def quote(s):
     quoting is slightly different so that it doesn't get automatically
     unquoted by the Web browser.
     """
-    if not isinstance(s, six.string_types):
+    if not isinstance(s, basestring):
         return s
     res = list(s)
     for i in range(len(res)):
@@ -137,6 +145,8 @@ def unquote(s):
     """
     Undo the effects of quote(). Based heavily on urllib.unquote().
     """
+    if not isinstance(s, basestring):
+        return s
     mychr = chr
     myatoi = int
     list = s.split('_')
@@ -154,78 +164,17 @@ def unquote(s):
     return "".join(res)
 
 
-def flatten(fields):
-    """Returns a list which is a single level of flattening of the
-    original list."""
-    flat = []
-    for field in fields:
-        if isinstance(field, (list, tuple)):
-            flat.extend(field)
-        else:
-            flat.append(field)
-    return flat
-
-
 def flatten_fieldsets(fieldsets):
     """Returns a list of field names from an admin fieldsets structure."""
     field_names = []
     for name, opts in fieldsets:
-        field_names.extend(
-            flatten(opts['fields'])
-        )
+        for field in opts['fields']:
+            # type checking feels dirty, but it seems like the best way here
+            if type(field) == tuple:
+                field_names.extend(field)
+            else:
+                field_names.append(field)
     return field_names
-
-
-def get_deleted_objects(objs, opts, user, admin_site, using):
-    """
-    Find all objects related to ``objs`` that should also be deleted. ``objs``
-    must be a homogeneous iterable of objects (e.g. a QuerySet).
-
-    Returns a nested list of strings suitable for display in the
-    template with the ``unordered_list`` filter.
-
-    """
-    collector = NestedObjects(using=using)
-    collector.collect(objs)
-    perms_needed = set()
-
-    def format_callback(obj):
-        has_admin = obj.__class__ in admin_site._registry
-        opts = obj._meta
-
-        no_edit_link = '<span class="label label-info">%s:</span> %s' % (capfirst(opts.verbose_name),
-                                   force_text(obj))
-
-        if has_admin:
-            try:
-                admin_url = reverse('%s:%s_%s_change'
-                                    % (admin_site.name,
-                                       opts.app_label,
-                                       opts.model_name),
-                                    None, (quote(obj._get_pk_val()),))
-            except NoReverseMatch:
-                # Change url doesn't exist -- don't display link to edit
-                return no_edit_link
-
-            p = '%s.%s' % (opts.app_label,
-                           get_permission_codename('delete', opts))
-            if not user.has_perm(p):
-                perms_needed.add(opts.verbose_name)
-            # Display a link to the admin page.
-            return format_html('<span class="label label-info">{}:</span> <a href="{}">{}</a>',
-                               capfirst(opts.verbose_name),
-                               admin_url,
-                               obj)
-        else:
-            # Don't display link to edit, because it either has no
-            # admin or is edited inline.
-            return no_edit_link
-
-    to_delete = collector.nested(format_callback)
-
-    protected = [format_callback(obj) for obj in collector.protected]
-
-    return to_delete, collector.model_count, perms_needed, protected
 
 
 class NestedObjects(Collector):
@@ -233,25 +182,19 @@ class NestedObjects(Collector):
         super(NestedObjects, self).__init__(*args, **kwargs)
         self.edges = {}  # {from_instance: [to_instances]}
         self.protected = set()
-        self.model_count = defaultdict(int)
 
     def add_edge(self, source, target):
         self.edges.setdefault(source, []).append(target)
 
-    def collect(self, objs, source=None, source_attr=None, **kwargs):
+    def collect(self, objs, source_attr=None, **kwargs):
         for obj in objs:
-            if source_attr and not source_attr.endswith('+'):
-                related_name = source_attr % {
-                    'class': source._meta.model_name,
-                    'app_label': source._meta.app_label,
-                }
-                self.add_edge(getattr(obj, related_name), obj)
+            if source_attr and hasattr(obj, source_attr):
+                self.add_edge(getattr(obj, source_attr), obj)
             else:
                 self.add_edge(None, obj)
-            self.model_count[obj._meta.verbose_name_plural] += 1
         try:
             return super(NestedObjects, self).collect(objs, source_attr=source_attr, **kwargs)
-        except models.ProtectedError as e:
+        except models.ProtectedError, e:
             self.protected.update(e.protected_objects)
 
     def related_objects(self, related, objs):
@@ -284,13 +227,6 @@ class NestedObjects(Collector):
             roots.extend(self._nested(root, seen, format_callback))
         return roots
 
-    def can_fast_delete(self, *args, **kwargs):
-        """
-        We always want to load the objects into memory so that we can display
-        them to the user in confirm page.
-        """
-        return False
-
 
 def model_format_dict(obj):
     """
@@ -307,8 +243,8 @@ def model_format_dict(obj):
     else:
         opts = obj
     return {
-        'verbose_name': force_str(opts.verbose_name),
-        'verbose_name_plural': force_str(opts.verbose_name_plural)
+        'verbose_name': force_unicode(opts.verbose_name),
+        'verbose_name_plural': force_unicode(opts.verbose_name_plural)
     }
 
 
@@ -330,7 +266,6 @@ def model_ngettext(obj, n=None):
     singular, plural = d["verbose_name"], d["verbose_name_plural"]
     return ungettext(singular, plural, n or 0)
 
-
 def is_rel_field(name,model):
     if hasattr(name,'split') and name.find("__")>0:
         parts = name.split("__")
@@ -338,12 +273,11 @@ def is_rel_field(name,model):
             return True
     return False
 
-
 def lookup_field(name, obj, model_admin=None):
     opts = obj._meta
     try:
-        f = _get_non_gfk_field(opts, name)
-    except FieldDoesNotExist:
+        f = opts.get_field(name)
+    except models.FieldDoesNotExist:
         # For non-field values, the value is either a method, property or
         # returned via a callable.
         if callable(name):
@@ -371,98 +305,6 @@ def lookup_field(name, obj, model_admin=None):
         value = getattr(obj, name)
     return f, attr, value
 
-
-def _get_non_gfk_field(opts, name):
-    """
-    For historical reasons, the admin app relies on GenericForeignKeys as being
-    "not found" by get_field(). This could likely be cleaned up.
-    """
-    field = opts.get_field(name)
-    if field.is_relation and field.many_to_one and not field.related_model:
-        raise FieldDoesNotExist()
-    return field
-
-def label_for_field(name, model, model_admin=None, return_attr=False):
-    """
-    Returns a sensible label for a field name. The name can be a callable or the
-    name of an object attributes, as well as a genuine fields. If return_attr is
-    True, the resolved attribute (which could be a callable) is also returned.
-    This will be None if (and only if) the name refers to a field.
-    """
-    attr = None
-    try:
-        field = _get_non_gfk_field(model._meta, name)
-        try:
-            label = field.verbose_name
-        except AttributeError:
-            # field is likely a ForeignObjectRel
-            label = field.related_model._meta.verbose_name
-    except FieldDoesNotExist:
-        if name == "__unicode__":
-            label = force_text(model._meta.verbose_name)
-            attr = six.text_type
-        elif name == "__str__":
-            label = force_str(model._meta.verbose_name)
-            attr = bytes
-        else:
-            if callable(name):
-                attr = name
-            elif model_admin is not None and hasattr(model_admin, name):
-                attr = getattr(model_admin, name)
-            elif hasattr(model, name):
-                attr = getattr(model, name)
-            elif is_rel_field(name,model):
-                parts = name.split("__")
-                rel_name,name = parts[0],"__".join(parts[1:])
-                field = model._meta.get_field_by_name(rel_name)[0]
-
-                label = field.related_model._meta.verbose_name
-                
-                rel_model = field.related_model
-                rel_label = label_for_field(name, rel_model, model_admin=model_admin, return_attr=return_attr)
-                
-                if return_attr:
-                    rel_label,attr = rel_label
-                    return ("%s %s"%(label,rel_label), attr)
-                else:
-                    return "%s %s"%(label,rel_label)
-            else:
-                message = "Unable to lookup '%s' on %s" % (
-                    name, model._meta.object_name)
-                if model_admin:
-                    message += " or %s" % (model_admin.__class__.__name__,)
-                raise AttributeError(message)
-
-            if hasattr(attr, "short_description"):
-                label = attr.short_description
-            elif (isinstance(attr, property) and
-                  hasattr(attr, "fget") and
-                  hasattr(attr.fget, "short_description")):
-                label = attr.fget.short_description
-            elif callable(attr):
-                if attr.__name__ == "<lambda>":
-                    label = "--"
-                else:
-                    label = pretty_name(attr.__name__)
-            else:
-                label = pretty_name(name)
-    if return_attr:
-        return (label, attr)
-    else:
-        return label
-
-
-
-def help_text_for_field(name, model):
-    help_text = ""
-    try:
-        field = _get_non_gfk_field(model._meta, name)
-    except FieldDoesNotExist:
-        pass
-    else:
-        if hasattr(field, 'help_text'):
-            help_text = field.help_text
-    return smart_text(help_text)
 
 
 def admin_urlname(value, arg):
@@ -493,10 +335,10 @@ def display_for_field(value, field):
         return formats.number_format(value, field.decimal_places)
     elif isinstance(field, models.FloatField):
         return formats.number_format(value)
-    elif isinstance(field, models.FileField) and value:
-        return format_html('<a href="{}">{}</a>', value.url, value)
+    elif isinstance(field.rel, models.ManyToManyRel):
+        return ', '.join([smart_unicode(obj) for obj in value.all()])
     else:
-        return smart_text(value)
+        return smart_unicode(value)
 
 
 def display_for_value(value, boolean=False):
@@ -510,19 +352,20 @@ def display_for_value(value, boolean=False):
         return formats.localize(tz_localtime(value))
     elif isinstance(value, (datetime.date, datetime.time)):
         return formats.localize(value)
-    elif isinstance(value, six.integer_types + (decimal.Decimal, float)):
+    elif isinstance(value, (decimal.Decimal, float)):
         return formats.number_format(value)
     else:
-        return smart_text(value)
+        return smart_unicode(value)
 
 
 class NotRelationField(Exception):
     pass
 
-
 def get_model_from_relation(field):
-    if hasattr(field, 'get_path_info'):
-        return field.get_path_info()[-1].to_opts.model
+    if is_related_field(field):
+        return field.model
+    elif getattr(field, 'rel'):  # or isinstance?
+        return field.rel.to
     else:
         raise NotRelationField
 
@@ -541,20 +384,19 @@ def reverse_field_path(model, path):
     pieces = path.split(LOOKUP_SEP)
     for piece in pieces:
         field = parent._meta.get_field(piece)
+        direct = not field.auto_created or field.concrete
         # skip trailing data field if extant:
         if len(reversed_path) == len(pieces) - 1:  # final iteration
             try:
                 get_model_from_relation(field)
             except NotRelationField:
                 break
-
-        # Field should point to another model
-        if field.is_relation and not (field.auto_created and not field.concrete):
+        if direct:
             related_name = field.related_query_name()
             parent = field.rel.to
         else:
             related_name = field.field.name
-            parent = field.related_model
+            parent = field.model
         reversed_path.insert(0, related_name)
     return (parent, LOOKUP_SEP.join(reversed_path))
 
@@ -592,21 +434,20 @@ def get_limit_choices_to_from_path(model, path):
     """ Return Q object for limiting choices if applicable.
 
     If final model in path is linked via a ForeignKey or ManyToManyField which
-    has a ``limit_choices_to`` attribute, return it as a Q object.
+    has a `limit_choices_to` attribute, return it as a Q object.
     """
+
     fields = get_fields_from_path(model, path)
     fields = remove_trailing_data_field(fields)
-    get_limit_choices_to = (
+    limit_choices_to = (
         fields and hasattr(fields[-1], 'rel') and
-        getattr(fields[-1].rel, 'get_limit_choices_to', None))
-    if not get_limit_choices_to:
+        getattr(fields[-1].rel, 'limit_choices_to', None))
+    if not limit_choices_to:
         return models.Q()  # empty Q
-    limit_choices_to = get_limit_choices_to()
-    if isinstance(limit_choices_to, models.Q):
+    elif isinstance(limit_choices_to, models.Q):
         return limit_choices_to  # already a Q
     else:
         return models.Q(**limit_choices_to)  # convert dict to Q
-
 
 def sortkeypicker(keynames):
     negate = set()
@@ -621,3 +462,9 @@ def sortkeypicker(keynames):
                 composite[i] = -v
         return composite
     return getit
+
+def is_related_field(field):
+    return isinstance(field,ForeignObjectRel)
+
+def is_related_field2(field):
+    return (hasattr(field,'rel') and field.rel!=None) or is_related_field(field)

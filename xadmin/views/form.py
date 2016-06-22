@@ -7,7 +7,7 @@ from django.db import models, transaction
 from django.forms.models import modelform_factory
 from django.http import Http404, HttpResponseRedirect
 from django.template.response import TemplateResponse
-from django.utils.encoding import force_str
+from django.utils.encoding import force_unicode
 from django.utils.html import escape
 from django.template import loader
 from django.utils.translation import ugettext as _
@@ -16,7 +16,7 @@ from xadmin.layout import FormHelper, Layout, Fieldset, TabHolder, Container, Co
 from xadmin.util import unquote
 from xadmin.views.detail import DetailAdminUtil
 
-from xadmin.views.base import CommAdminView, filter_hook, csrf_protect_m
+from base import CommAdminView, filter_hook, csrf_protect_m
 
 class FormAdminView(CommAdminView):
     form = forms.ModelForm
@@ -83,7 +83,6 @@ class FormAdminView(CommAdminView):
     def get_form_helper(self):
         helper = FormHelper()
         helper.form_tag = False
-        helper.include_media = False
         helper.add_layout(self.get_form_layout())
 
         return helper
@@ -165,8 +164,8 @@ class FormAdminView(CommAdminView):
         msg = _('The %s was changed successfully.') % self.title
         self.message_user(msg, 'success')
 
-        if "_redirect" in request.GET or "_redirect" in request.POST:
-            return request.POST.get("_redirect", request.GET.get("_redirect"))
+        if "_redirect" in request.GET:
+            return request.GET["_redirect"]
         else:
             return self.get_redirect_url()
 

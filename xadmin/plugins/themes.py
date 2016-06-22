@@ -1,5 +1,5 @@
 #coding:utf-8
-import urllib
+import urllib, httplib2
 from django.template import loader
 from django.core.cache import cache
 from django.utils.translation import ugettext as _
@@ -7,7 +7,6 @@ from xadmin.sites import site
 from xadmin.models import UserSettings
 from xadmin.views import BaseAdminPlugin, BaseAdminView
 from xadmin.util import static, json
-import six
 
 THEME_CACHE_KEY = 'xadmin_themes'
 
@@ -61,14 +60,16 @@ class ThemePlugin(BaseAdminPlugin):
             else:
                 ex_themes = []
                 try:
-                    req = six.moves.urllib.request.Request("http://api.bootswatch.com/3/", headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.3"})
-                    watch_themes = json.loads(six.moves.urllib.request.urlopen(req).read())['themes']
+                    h = httplib2.Http()
+                    resp, content = h.request("http://bootswatch.com/api/3.json", 'GET', \
+                        "", headers={"Accept": "application/json", "User-Agent": self.request.META['HTTP_USER_AGENT']})
+                    watch_themes = json.loads(content)['themes']
                     ex_themes.extend([
                         {'name': t['name'], 'description': t['description'],
                             'css': t['cssMin'], 'thumbnail': t['thumbnail']}
                         for t in watch_themes])
-                except Exception:
-                    pass
+                except Exception, e:
+                    print e
 
                 cache.set(THEME_CACHE_KEY, json.dumps(ex_themes), 24 * 3600)
                 themes.extend(ex_themes)

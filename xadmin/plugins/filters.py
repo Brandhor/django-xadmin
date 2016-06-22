@@ -1,24 +1,20 @@
-import operator, sys
-from django.utils import six
+import operator
 from xadmin import widgets
 
 from xadmin.util import get_fields_from_path, lookup_needs_distinct
 from django.core.exceptions import SuspiciousOperation, ImproperlyConfigured, ValidationError
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
-from django.db.models.fields.related import ForeignObjectRel
 from django.db.models.sql.query import LOOKUP_SEP, QUERY_TERMS
 from django.template import loader
-from xadmin.compatibility import smart_str
+from django.utils.encoding import smart_str
 from django.utils.translation import ugettext as _
 
 from xadmin.filters import manager as filter_manager, FILTER_PREFIX, SEARCH_VAR, DateFieldListFilter, RelatedFieldSearchFilter
 from xadmin.sites import site
 from xadmin.views import BaseAdminPlugin, ListAdminView
+from xadmin.util import is_related_field
 
-
-if six.PY3:
-    from functools import reduce
 
 class IncorrectLookupParameters(Exception):
     pass
@@ -58,10 +54,10 @@ class FilterPlugin(BaseAdminPlugin):
                 # Lookups on non-existants fields are ok, since they're ignored
                 # later.
                 return True
-            if field.is_relation:
-                model = field.related_model
+            if hasattr(field, 'rel'):
+                model = field.rel.to
                 rel_name = field.rel.get_related_field().name
-            elif isinstance(field, ForeignObjectRel):
+            elif is_related_field(field):
                 model = field.model
                 rel_name = model._meta.pk.name
             else:
@@ -77,7 +73,7 @@ class FilterPlugin(BaseAdminPlugin):
     def get_list_queryset(self, queryset):
         lookup_params = dict([(smart_str(k)[len(FILTER_PREFIX):], v) for k, v in self.admin_view.params.items()
                               if smart_str(k).startswith(FILTER_PREFIX) and v != ''])
-        for p_key, p_val in six.iteritems(lookup_params):
+        for p_key, p_val in lookup_params.iteritems():
             if p_val == "False":
                 lookup_params[p_key] = False
         use_distinct = False
@@ -99,7 +95,8 @@ class FilterPlugin(BaseAdminPlugin):
             for list_filter in self.list_filter:
                 if callable(list_filter):
                     # This is simply a custom list filter class.
-                    spec = list_filter(self.request, lookup_params, self.model, self)
+                    spec = list_filter(self.request, lookup_params,
+                                       self.model, self)
                 else:
                     field_path = None
                     field_parts = []
@@ -130,9 +127,7 @@ class FilterPlugin(BaseAdminPlugin):
                 if spec and spec.has_output():
                     try:
                         new_qs = spec.do_filte(queryset)
-                    except ValidationError:
-                        import sys
-                        e =  sys.exc_info()[1]
+                    except ValidationError, e:
                         new_qs = None
                         self.admin_view.message_user(_("<b>Filtering error:</b> %s") % e.messages[0], 'error')
                     if new_qs is not None:
@@ -142,25 +137,21 @@ class FilterPlugin(BaseAdminPlugin):
 
         self.has_filters = bool(self.filter_specs)
         self.admin_view.filter_specs = self.filter_specs
-
-        self.admin_view.used_filter_num = len( list(filter(lambda f: f.is_used, self.filter_specs)) )
+        self.admin_view.used_filter_num = len(
+            filter(lambda f: f.is_used, self.filter_specs))
 
         try:
             for key, value in lookup_params.items():
                 use_distinct = (
                     use_distinct or lookup_needs_distinct(self.opts, key))
-        except FieldDoesNotExist:
-            import sys
-            e =  sys.exc_info()[1]
+        except FieldDoesNotExist, e:
             raise IncorrectLookupParameters(e)
 
         try:
             queryset = queryset.filter(**lookup_params)
         except (SuspiciousOperation, ImproperlyConfigured):
             raise
-        except Exception:
-            import sys
-            e =  sys.exc_info()[1]
+        except Exception, e:
             raise IncorrectLookupParameters(e)
 
         query = self.request.GET.get(SEARCH_VAR, '')
@@ -208,17 +199,16 @@ class FilterPlugin(BaseAdminPlugin):
     # Block Views
     def block_nav_menu(self, context, nodes):
         if self.has_filters:
-            nodes.append(loader.render_to_string('xadmin/blocks/model_list.nav_menu.filters.html', context=context.flatten(), request=context.request))
+            nodes.append(loader.render_to_string('xadmin/blocks/model_list.nav_menu.filters.html', context=context))
 
     def block_nav_form(self, context, nodes):
         if self.search_fields:
-            cx = context.flatten()
-            cx.update({'search_var': SEARCH_VAR,
-                        'remove_search_url': self.admin_view.get_query_string(remove=[SEARCH_VAR]),
-                        'search_form_params': self.admin_view.get_form_params(remove=[SEARCH_VAR])})
             nodes.append(
                 loader.render_to_string(
                     'xadmin/blocks/model_list.nav_form.search_form.html',
-                    context=cx, request=context.request))
+                    {'search_var': SEARCH_VAR,
+                        'remove_search_url': self.admin_view.get_query_string(remove=[SEARCH_VAR]),
+                        'search_form_params': self.admin_view.get_form_params(remove=[SEARCH_VAR])},
+                    ))
 
 site.register_plugin(FilterPlugin, ListAdminView)

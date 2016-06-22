@@ -3,30 +3,26 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.db.models.query import QuerySet
-from django.db.models.fields.related import ForeignObjectRel
 from django.forms.models import model_to_dict
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
-from django.utils.encoding import force_str
+from django.utils.encoding import force_unicode
 from django.utils.safestring import mark_safe
 from django.utils.text import capfirst
 from django.utils.translation import ugettext as _
 from xadmin.layout import Field, render_field
+from xadmin.plugins.inline import Inline
 from xadmin.plugins.actions import BaseActionView
 from xadmin.plugins.inline import InlineModelAdmin
 from xadmin.sites import site
-from xadmin.util import unquote, quote, model_format_dict
+from xadmin.util import unquote, quote, model_format_dict,is_related_field
 from xadmin.views import BaseAdminPlugin, ModelAdminView, CreateAdminView, UpdateAdminView, DetailAdminView, ModelFormAdminView, DeleteAdminView, ListAdminView
 from xadmin.views.base import csrf_protect_m, filter_hook
 from xadmin.views.detail import DetailAdminUtil
 from reversion.models import Revision, Version
 from reversion.revisions import default_revision_manager, RegistrationError
 from functools import partial
-try:
-    from crispy_forms.utils import TEMPLATE_PACK
-except:
-    TEMPLATE_PACK = 'bootstrap3'
 
 
 def _autoregister(admin, model, follow=None):
@@ -56,7 +52,10 @@ def _register_model(admin, model):
                 ct_field = getattr(inline, 'ct_field', 'content_type')
                 ct_fk_field = getattr(inline, 'ct_fk_field', 'object_id')
                 for field in model._meta.many_to_many:
-                    if isinstance(field, GenericRelation) and field.rel.to == inline_model and field.object_id_field_name == ct_fk_field and field.content_type_field_name == ct_field:
+                    if isinstance(field, GenericRelation) \
+                            and field.rel.to == inline_model \
+                            and field.object_id_field_name == ct_fk_field \
+                            and field.content_type_field_name == ct_field:
                         inline_fields.append(field.name)
                 _autoregister(admin, inline_model)
             else:
@@ -67,8 +66,7 @@ def _register_model(admin, model):
                             fk_name = field.name
                 _autoregister(admin, inline_model, follow=[fk_name])
                 if not inline_model._meta.get_field(fk_name).rel.is_hidden():
-                    accessor = inline_model._meta.get_field(
-                        fk_name).remote_field.get_accessor_name()
+                    accessor = inline_model._meta.get_field(fk_name).remote_field.get_accessor_name()
                     inline_fields.append(accessor)
         _autoregister(admin, model, inline_fields)
 
@@ -225,7 +223,7 @@ class RecoverListView(BaseReversionView):
             "opts": opts,
             "app_label": opts.app_label,
             "model_name": capfirst(opts.verbose_name),
-            "title": _("Recover deleted %(name)s") % {"name": force_str(opts.verbose_name_plural)},
+            "title": _("Recover deleted %(name)s") % {"name": force_unicode(opts.verbose_name_plural)},
             "deleted": deleted,
             "changelist_url": self.model_admin_url("changelist"),
         })
@@ -263,9 +261,9 @@ class RevisionListView(BaseReversionView):
             ).select_related("revision__user"))
         ]
         context.update({
-            'title': _('Change history: %s') % force_str(self.obj),
+            'title': _('Change history: %s') % force_unicode(self.obj),
             'action_list': action_list,
-            'model_name': capfirst(force_str(opts.verbose_name_plural)),
+            'model_name': capfirst(force_unicode(opts.verbose_name_plural)),
             'object': self.obj,
             'app_label': opts.app_label,
             "changelist_url": self.model_admin_url("changelist"),
@@ -333,8 +331,8 @@ class RevisionListView(BaseReversionView):
         obj_b, detail_b = self.get_version_object(version_b)
 
         for f in (self.opts.fields + self.opts.many_to_many):
-            if isinstance(f, ForeignObjectRel):
-                label = f.model._meta.verbose_name
+            if is_related_field(f):
+                label = f.opts.verbose_name
             else:
                 label = f.verbose_name
 
@@ -404,11 +402,11 @@ class BaseRevisionView(ModelFormAdminView):
 
 class DiffField(Field):
 
-    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK):
+    def render(self, form, form_style, context):
         html = ''
         for field in self.fields:
             html += ('<div class="diff_field" rel="tooltip"><textarea class="org-data" style="display:none;">%s</textarea>%s</div>' %
-                    (_('Current: %s') % self.attrs.pop('orgdata', ''), render_field(field, form, form_style, context, template=self.get_template_name(template_pack), attrs=self.attrs, template_pack=template_pack)))
+                    (_('Current: %s') % self.attrs.pop('orgdata', ''), render_field(field, form, form_style, context, template=self.template, attrs=self.attrs)))
         return html
 
 
@@ -440,7 +438,7 @@ class RevisionView(BaseRevisionView):
     def get_context(self):
         context = super(RevisionView, self).get_context()
         context["title"] = _(
-            "Revert %s") % force_str(self.model._meta.verbose_name)
+            "Revert %s") % force_unicode(self.model._meta.verbose_name)
         return context
 
     @filter_hook
@@ -457,7 +455,7 @@ class RevisionView(BaseRevisionView):
     @filter_hook
     def post_response(self):
         self.message_user(_('The %(model)s "%(name)s" was reverted successfully. You may edit it again below.') %
-                          {"model": force_str(self.opts.verbose_name), "name": unicode(self.new_obj)}, 'success')
+                          {"model": force_unicode(self.opts.verbose_name), "name": unicode(self.new_obj)}, 'success')
         return HttpResponseRedirect(self.model_admin_url('change', self.new_obj.pk))
 
 
@@ -494,13 +492,13 @@ class RecoverView(BaseRevisionView):
     @filter_hook
     def post_response(self):
         self.message_user(_('The %(model)s "%(name)s" was recovered successfully. You may edit it again below.') %
-                          {"model": force_str(self.opts.verbose_name), "name": unicode(self.new_obj)}, 'success')
+                          {"model": force_unicode(self.opts.verbose_name), "name": unicode(self.new_obj)}, 'success')
         return HttpResponseRedirect(self.model_admin_url('change', self.new_obj.pk))
 
 
 class InlineDiffField(Field):
 
-    def render(self, form, form_style, context, template_pack=TEMPLATE_PACK):
+    def render(self, form, form_style, context):
         html = ''
         instance = form.instance
         if not instance.pk:
@@ -512,7 +510,7 @@ class InlineDiffField(Field):
         for field in self.fields:
             f = opts.get_field(field)
             f_html = render_field(field, form, form_style, context,
-                                  template=self.get_template_name(template_pack), attrs=self.attrs, template_pack=template_pack)
+                                  template=self.template, attrs=self.attrs)
             if f.value_from_object(instance) != initial.get(field, None):
                 current_val = detail.get_field_result(f.name).val
                 html += ('<div class="diff_field" rel="tooltip"><textarea class="org-data" style="display:none;">%s</textarea>%s</div>'

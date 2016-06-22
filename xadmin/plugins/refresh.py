@@ -21,8 +21,7 @@ class RefreshPlugin(BaseAdminPlugin):
     def block_top_toolbar(self, context, nodes):
         if self.refresh_times:
             current_refresh = self.request.GET.get(REFRESH_VAR)
-            cx = context.flatten()
-            cx.update({
+            context.update({
                 'has_refresh': bool(current_refresh),
                 'clean_refresh_url': self.admin_view.get_query_string(remove=(REFRESH_VAR,)),
                 'current_refresh': current_refresh,
@@ -32,7 +31,7 @@ class RefreshPlugin(BaseAdminPlugin):
                     'selected': str(r) == current_refresh,
                 } for r in self.refresh_times],
             })
-            nodes.append(loader.render_to_string('xadmin/blocks/model_list.top_toolbar.refresh.html', context=cx, request=context.request))
+            nodes.append(loader.render_to_string('xadmin/blocks/model_list.top_toolbar.refresh.html', context))
 
 
 site.register_plugin(RefreshPlugin, ListAdminView)

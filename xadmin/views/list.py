@@ -1,17 +1,18 @@
+from collections import OrderedDict
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
 from django.http import HttpResponseRedirect
 from django.template.response import SimpleTemplateResponse, TemplateResponse
-from collections import OrderedDict
+from django.utils.encoding import force_unicode, smart_unicode
 from django.utils.html import escape, conditional_escape
 from django.utils.safestring import mark_safe
 from django.utils.text import capfirst
 from django.utils.translation import ugettext as _
 
 from xadmin.util import lookup_field, display_for_field, label_for_field, boolean_icon
-from xadmin.views.base import ModelAdminView, filter_hook, inclusion_tag, csrf_protect_m
-from xadmin.compatibility import force_str, smart_unicode
+
+from base import ModelAdminView, filter_hook, inclusion_tag, csrf_protect_m
 
 # List settings
 ALL_VAR = 'all'
@@ -64,7 +65,7 @@ class ResultItem(object):
     def label(self):
         text = mark_safe(
             self.text) if self.allow_tags else conditional_escape(self.text)
-        if force_str(text) == '':
+        if force_unicode(text) == '':
             text = mark_safe('&nbsp;')
         for wrap in self.wraps:
             text = mark_safe(wrap % text)
@@ -368,13 +369,12 @@ class ListAdminView(ModelAdminView):
         """
         Prepare the context for templates.
         """
-        self.title = _('%s List') % force_str(self.opts.verbose_name)
-
+        self.title = _('%s List') % force_unicode(self.opts.verbose_name)
         model_fields = [(f, f.name in self.list_display, self.get_check_field_url(f))
                         for f in (list(self.opts.fields) + self.get_model_method_fields()) if f.name not in self.list_exclude]
 
         new_context = {
-            'model_name': force_str(self.opts.verbose_name_plural),
+            'model_name': force_unicode(self.opts.verbose_name_plural),
             'title': self.title,
             'cl': self,
             'model_fields': model_fields,
@@ -409,8 +409,6 @@ class ListAdminView(ModelAdminView):
         context.update(kwargs or {})
 
         response = self.get_response(context, *args, **kwargs)
-        request.current_app = self.admin_site.name
-
         return response or TemplateResponse(request, self.object_list_template or
                                             self.get_template_list('views/model_list.html'), context)
 
@@ -460,7 +458,7 @@ class ListAdminView(ModelAdminView):
         if field_name in ordering_field_columns:
             sorted = True
             order_type = ordering_field_columns.get(field_name).lower()
-            sort_priority = list(ordering_field_columns.keys()).index(field_name) + 1
+            sort_priority = ordering_field_columns.keys().index(field_name) + 1
             th_classes.append('sorted %sending' % order_type)
             new_order_type = {'asc': 'desc', 'desc': 'asc'}[order_type]
 

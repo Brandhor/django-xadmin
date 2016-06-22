@@ -1,46 +1,38 @@
-;(function ($) {
-    // add select2 render
-    $.fn.exform.renders.push(function (f) {
-        if (!window.__admin_ismobile__ && $.fn.selectize) {
-            f.find('select:not(.select-search):not([multiple=multiple])').selectize();
-        }
-        if ($.fn.select2) {
-            f.find('.select-search').each(function () {
-                var $el = $(this);
-                $el.select2({
-                    minimumInputLength: 1,
-                    ajax: {
-                        url: $el.data('search-url') + $el.data('choices'),
+;(function($){
+    // add select render
+    $.fn.exform.renders.push(function(f){
+      if($.fn.selectize){
+        f.find('select:not(.select-search):not([multiple=multiple])').selectize();
+        f.find('.select-search').each(function(){
+            var $el = $(this);
+            var preload = $el.hasClass('select-preload');
+            $el.selectize({
+                valueField: 'id',
+                labelField: '__str__',
+                searchField: '__str__',
+                create: false,
+                maxItems: 1,
+                preload: preload,
+                load: function(query, callback) {
+                    if(!preload && !query.length) return callback();
+                    $.ajax({
+                        url: $el.data('search-url')+$el.data('choices'),
                         dataType: 'json',
-                        data: function (params) {
-                            return {
-                                '_q_': params.term,
-                                '_cols': 'id.__str__',
-                                'p': params.page - 1
-                            };
+                        data: {
+                            '_q_' : query,
+                            '_cols': 'id.__str__'
                         },
-                        processResults: function (data, params) {
-                            // parse the results into the format expected by Select2
-                            // since we are using custom formatting functions we do not need to
-                            // alter the remote JSON data, except to indicate that infinite
-                            // scrolling can be used
-                            params.page = params.page || 1;
-
-                            var res = $.map(data.objects, function (obj) {
-                                obj.text = obj.text || obj.__str__;
-                                return obj;
-                            });
-
-                            return {
-                                results: res,
-                                pagination: {
-                                    more: data.has_more
-                                }
-                            };
+                        type: 'GET',
+                        error: function() {
+                            callback();
                         },
-                    },
-                });
-            })
-        }
-    });
-})(jQuery);
+                        success: function(res) {
+                            callback(res.objects);
+                        }
+                    });
+                }
+            });
+        })
+    }});
+})(jQuery)
+

@@ -12,6 +12,7 @@ from django.utils.text import Truncator
 from django.core.cache import cache, caches
 
 from xadmin.views.list import EMPTY_CHANGELIST_VALUE
+from xadmin.util import is_related_field,is_related_field2
 import datetime
 
 FILTER_PREFIX = '_p_'
@@ -316,11 +317,11 @@ class RelatedFieldSearchFilter(FieldFilter):
 
     @classmethod
     def test(cls, field, request, params, model, admin_view, field_path):
-        if not (hasattr(field, 'rel') and bool(field.rel) or isinstance(field, ForeignObjectRel)):
+        if not is_related_field2(field):
             return False
         related_modeladmin = admin_view.admin_site._registry.get(
             get_model_from_relation(field))
-        return related_modeladmin and getattr(related_modeladmin, 'relfield_style', None) == 'fk-ajax'
+        return related_modeladmin and getattr(related_modeladmin, 'relfield_style', None) in ('fk-ajax', 'fk-select')
 
     def __init__(self, field, request, params, model, model_admin, field_path):
         other_model = get_model_from_relation(field)
@@ -332,6 +333,9 @@ class RelatedFieldSearchFilter(FieldFilter):
         self.lookup_formats = {'in': '%%s__%s__in' % rel_name,'exact': '%%s__%s__exact' % rel_name}
         super(RelatedFieldSearchFilter, self).__init__(
             field, request, params, model, model_admin, field_path)
+
+        related_modeladmin = self.admin_view.admin_site._registry.get(other_model)
+        self.relfield_style = related_modeladmin.relfield_style
 
         if hasattr(field, 'verbose_name'):
             self.lookup_title = field.verbose_name
@@ -359,6 +363,7 @@ class RelatedFieldSearchFilter(FieldFilter):
         context['search_url'] = self.search_url
         context['label'] = self.label
         context['choices'] = self.choices
+        context['relfield_style'] = self.relfield_style
         return context
 
 
@@ -367,7 +372,7 @@ class RelatedFieldListFilter(ListFieldFilter):
 
     @classmethod
     def test(cls, field, request, params, model, admin_view, field_path):
-        return (hasattr(field, 'rel') and bool(field.rel) or isinstance(field, ForeignObjectRel))
+        return is_related_field2(field)
 
     def __init__(self, field, request, params, model, model_admin, field_path):
         other_model = get_model_from_relation(field)
@@ -389,7 +394,7 @@ class RelatedFieldListFilter(ListFieldFilter):
         self.title = self.lookup_title
 
     def has_output(self):
-        if (isinstance(self.field, ForeignObjectRel)
+        if (is_related_field(self.field)
                 and self.field.field.null or hasattr(self.field, 'rel')
                 and self.field.null):
             extra = 1
@@ -415,7 +420,7 @@ class RelatedFieldListFilter(ListFieldFilter):
                 }, [self.lookup_isnull_name]),
                 'display': val,
             }
-        if (isinstance(self.field, ForeignObjectRel)
+        if (is_related_field(self.field)
                 and self.field.field.null or hasattr(self.field, 'rel')
                 and self.field.null):
             yield {

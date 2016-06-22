@@ -1,5 +1,5 @@
 {% load i18n %}
-<li class="dropdown-submenu filter-fk-search" xmlns="http://www.w3.org/1999/html">
+<li class="dropdown-submenu filter-fk-search">
   <a><i class="fa fa-filter {% if spec.is_used %}text-success{%else%}text-muted{% endif %}"></i> {{ title }}</a>
   <div class="popover right">
     <div class="arrow"></div>
@@ -9,10 +9,18 @@
     <div class="popover-content">
       <form class="exform" method="get" action="">
         {{ form_params|safe }}
-          <select name="{{exact_name}}" class="select-search form-control"
-          data-search-url="{{search_url}}" data-label="{{label}} " data-choices="{{ choices }}"
-          data-placeholder="{% trans "Search" %} {{title}}…">
+          <select name="{{exact_name}}" class="select-search {% if relfield_style == 'fk-select' %}select-preload{% endif %}" data-search-url="{{search_url}}" data-choices="{{ choices }}"
+          {% if relfield_style == 'fk-select' %}
+          data-placeholder="{% trans "Select" %} {{title}}…"
+          {% else %}
+          data-placeholder="{% trans "Search" %} {{title}}…"
+          {% endif %}
+          >
+          {% if exact_val %}
+            <option value="{{exact_val}}" selected="selected">{{label}}</option>
+          {% endif %}
           </select>
+
           <button type="submit" class="btn btn-success">{% trans "Apply" %}</button>
         {% if spec.used_params %}
           <a class="btn btn-default" href="{{remove_url}}">{% trans "Clean" %}</a>
