@@ -445,12 +445,13 @@ class RevisionView(BaseRevisionView):
     def get_response(self):
         context = self.get_context()
         context.update(self.kwargs or {})
+        self.request.current_app = self.admin_site.name
 
         form_template = self.revision_form_template
         return TemplateResponse(
             self.request, form_template or self.get_template_list(
                 'views/revision_form.html'),
-            context, current_app=self.admin_site.name)
+            context)
 
     @filter_hook
     def post_response(self):

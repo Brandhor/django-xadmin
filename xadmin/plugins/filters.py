@@ -199,7 +199,7 @@ class FilterPlugin(BaseAdminPlugin):
     # Block Views
     def block_nav_menu(self, context, nodes):
         if self.has_filters:
-            nodes.append(loader.render_to_string('xadmin/blocks/model_list.nav_menu.filters.html', context=context))
+            nodes.append(loader.render_to_string('xadmin/blocks/model_list.nav_menu.filters.html', context=context.flatten()))
 
     def block_nav_form(self, context, nodes):
         if self.search_fields:

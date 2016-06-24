@@ -9,10 +9,11 @@ from xadmin.views import BaseAdminPlugin, CommAdminView
 class SetLangNavPlugin(BaseAdminPlugin):
 
     def block_top_navmenu(self, context, nodes):
-        nodes.append(
-            loader.render_to_string('xadmin/blocks/comm.top.setlang.html', {
-                'redirect_to': self.request.get_full_path(),
-            }))
+        context = context.flatten()
+        context.update({
+            'redirect_to': self.request.get_full_path(),
+        })
+        nodes.append(loader.render_to_string('xadmin/blocks/comm.top.setlang.html', context))
 
 if settings.LANGUAGES and 'django.middleware.locale.LocaleMiddleware' in settings.MIDDLEWARE_CLASSES:
     site.register_plugin(SetLangNavPlugin, CommAdminView)

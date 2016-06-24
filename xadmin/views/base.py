@@ -76,7 +76,7 @@ def filter_hook(func):
     return method
 
 
-def inclusion_tag(file_name, context_class=Context, takes_context=False):
+def inclusion_tag(file_name, context_class=dict, takes_context=False):
     def wrap(func):
         @functools.wraps(func)
         def method(self, context, nodes, *arg, **kwargs):
